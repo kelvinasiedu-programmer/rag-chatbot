@@ -2,7 +2,8 @@
 
 import logging
 
-from transformers import pipeline as hf_pipeline
+import torch
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 from .config import Settings
 from .pdf_processor import PDFProcessor
@@ -40,9 +41,12 @@ class RAGEngine:
         )
 
         logger.info("Loading LLM: %s", settings.llm_model)
-        self.llm = hf_pipeline("text2text-generation", model=settings.llm_model)
+        self.tokenizer = AutoTokenizer.from_pretrained(settings.llm_model)
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(settings.llm_model)
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model.to(self.device)
 
-        logger.info("RAG Engine ready")
+        logger.info("RAG Engine ready (device=%s)", self.device)
 
     def ingest_pdf(self, pdf_path: str) -> int:
         """Parse a PDF, chunk its text, and add to the vector store."""
@@ -66,12 +70,16 @@ class RAGEngine:
         context = "\n\n".join(r["text"] for r in results)
         prompt = PROMPT_TEMPLATE.format(context=context, question=question)
 
-        response = self.llm(
-            prompt,
-            max_new_tokens=self.settings.max_tokens,
-            num_return_sequences=1,
-        )
-        answer = response[0]["generated_text"].strip()
+        inputs = self.tokenizer(
+            prompt, return_tensors="pt", max_length=512, truncation=True
+        ).to(self.device)
+
+        with torch.no_grad():
+            outputs = self.model.generate(
+                **inputs, max_new_tokens=self.settings.max_tokens
+            )
+
+        answer = self.tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
 
         sources = [
             {

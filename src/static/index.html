@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG Chatbot</title>
+<style>
+/* ===== RESET ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-deep:      #07070f;
+  --bg-primary:   #0d0d1f;
+  --bg-card:      #13132b;
+  --bg-input:     #1a1a38;
+  --bg-hover:     #1e1e42;
+  --purple-700:   #6d28d9;
+  --purple-600:   #7c3aed;
+  --purple-500:   #8b5cf6;
+  --purple-400:   #a78bfa;
+  --purple-glow:  rgba(139, 92, 246, 0.12);
+  --purple-border:rgba(139, 92, 246, 0.22);
+  --text-1: #f1f5f9;
+  --text-2: #94a3b8;
+  --text-3: #475569;
+  --green:  #10b981;
+  --red:    #ef4444;
+  --r:  12px;
+  --rs:  8px;
+  --sidebar-w: 276px;
+}
+
+html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg-deep); color: var(--text-1); overflow: hidden; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--purple-border); border-radius: 2px; }
+
+/* ===== APP GRID ===== */
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  grid-template-rows: 54px 1fr;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ===== HEADER ===== */
+.header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--purple-border);
+  backdrop-filter: blur(12px);
+}
+.header-left { display: flex; align-items: center; gap: 10px; }
+.logo {
+  width: 30px; height: 30px;
+  background: linear-gradient(135deg, var(--purple-600), var(--purple-400));
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; box-shadow: 0 0 12px var(--purple-glow);
+}
+.app-name { font-size: 15px; font-weight: 600; letter-spacing: -.3px; }
+.app-sub  { font-size: 11px; color: var(--text-3); margin-left: 4px; margin-top: 2px; }
+
+.header-right { display: flex; align-items: center; gap: 14px; }
+.status-badge { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); transition: all .3s; }
+.status-dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.status-dot.loading { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; animation: pulse 1s infinite; }
+
+.pill {
+  font-size: 12px; color: var(--text-2);
+  background: var(--bg-card);
+  border: 1px solid var(--purple-border);
+  padding: 3px 11px; border-radius: 20px;
+}
+.pill span { color: var(--purple-400); font-weight: 600; }
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+  background: var(--bg-primary);
+  border-right: 1px solid var(--purple-border);
+  padding: 16px 14px;
+  display: flex; flex-direction: column; gap: 14px;
+  overflow-y: auto;
+}
+.section-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .09em; color: var(--text-3);
+}
+
+/* Upload zone */
+.upload-zone {
+  border: 2px dashed var(--purple-border);
+  border-radius: var(--r);
+  padding: 22px 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s;
+  background: var(--purple-glow);
+  position: relative;
+}
+.upload-zone:hover, .upload-zone.drag-over {
+  border-color: var(--purple-500);
+  background: rgba(139,92,246,.1);
+  box-shadow: 0 0 18px var(--purple-glow);
+}
+.upload-icon { font-size: 26px; margin-bottom: 7px; opacity: .75; }
+.upload-label { font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+.upload-label strong { color: var(--purple-400); display: block; margin-bottom: 1px; }
+.upload-input { display: none; }
+
+/* Spinner */
+.upload-spinner {
+  display: none;
+  position: absolute; inset: 0;
+  background: rgba(13,13,31,.85);
+  border-radius: var(--r);
+  align-items: center; justify-content: center; flex-direction: column; gap: 8px;
+  font-size: 12px; color: var(--text-2);
+}
+.upload-spinner.active { display: flex; }
+.spinner {
+  width: 22px; height: 22px; border: 2px solid var(--purple-border);
+  border-top-color: var(--purple-500);
+  border-radius: 50%; animation: spin .7s linear infinite;
+}
+
+/* Doc list */
+.doc-list { display: flex; flex-direction: column; gap: 6px; }
+.empty-state { text-align: center; padding: 12px 6px; color: var(--text-3); font-size: 12px; line-height: 1.6; }
+.doc-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--purple-border);
+  border-radius: var(--rs);
+  font-size: 12px; color: var(--text-2);
+  animation: slideIn .2s ease;
+}
+.doc-icon { font-size: 13px; opacity: .8; flex-shrink: 0; }
+.doc-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-chunks {
+  color: var(--purple-400); font-size: 11px;
+  background: rgba(139,92,246,.12); padding: 1px 7px;
+  border-radius: 10px; flex-shrink: 0;
+}
+
+/* Clear btn */
+.btn-clear {
+  margin-top: auto;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 9px;
+  background: var(--bg-card);
+  border: 1px solid var(--purple-border);
+  border-radius: var(--rs);
+  font-size: 12px; color: var(--text-2);
+  cursor: pointer; transition: all .2s; font-family: inherit;
+}
+.btn-clear:hover { background: rgba(239,68,68,.1); border-color: rgba(239,68,68,.3); color: #fca5a5; }
+
+/* ===== CHAT AREA ===== */
+.chat { display: flex; flex-direction: column; background: var(--bg-deep); overflow: hidden; }
+
+.messages {
+  flex: 1; overflow-y: auto;
+  padding: 28px 32px;
+  display: flex; flex-direction: column; gap: 22px;
+}
+
+/* Welcome */
+.welcome {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center; gap: 10px;
+  opacity: .55; user-select: none; padding: 40px;
+  animation: fadeIn .5s ease;
+}
+.welcome-glyph {
+  font-size: 52px; margin-bottom: 6px;
+  filter: drop-shadow(0 0 16px var(--purple-500));
+}
+.welcome h2 { font-size: 20px; font-weight: 600; }
+.welcome p { font-size: 13.5px; color: var(--text-2); line-height: 1.65; max-width: 300px; }
+
+/* Messages */
+.msg { display: flex; flex-direction: column; animation: msgIn .25s ease; }
+.msg.user  { align-items: flex-end; }
+.msg.bot   { align-items: flex-start; }
+
+.bubble {
+  max-width: 70%;
+  padding: 12px 16px;
+  border-radius: 18px;
+  font-size: 14px; line-height: 1.65;
+}
+.msg.user .bubble {
+  background: linear-gradient(135deg, var(--purple-700), var(--purple-500));
+  color: #fff;
+  border-bottom-right-radius: 4px;
+  box-shadow: 0 4px 16px rgba(124,58,237,.35);
+}
+.msg.bot .bubble {
+  background: var(--bg-card);
+  border: 1px solid var(--purple-border);
+  color: var(--text-1);
+  border-bottom-left-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.3);
+}
+
+/* Sources */
+.sources { margin-top: 8px; max-width: 70%; width: 100%; }
+.sources-toggle {
+  font-size: 11.5px; color: var(--purple-400);
+  cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+  margin-bottom: 7px; user-select: none; transition: color .15s;
+}
+.sources-toggle:hover { color: var(--purple-300); }
+.sources-list { display: flex; flex-direction: column; gap: 6px; }
+
+.src-card {
+  background: var(--bg-card);
+  border: 1px solid var(--purple-border);
+  border-radius: var(--rs);
+  padding: 10px 12px;
+  font-size: 12px;
+}
+.src-meta {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 5px;
+}
+.src-label { color: var(--purple-400); font-weight: 500; }
+.src-score {
+  background: rgba(139,92,246,.15); color: var(--purple-400);
+  padding: 2px 8px; border-radius: 10px; font-size: 11px;
+}
+.src-text { color: var(--text-2); line-height: 1.55; }
+
+/* Typing */
+.typing { display: flex; animation: msgIn .25s ease; }
+.typing-bubble {
+  background: var(--bg-card);
+  border: 1px solid var(--purple-border);
+  border-radius: 18px; border-bottom-left-radius: 4px;
+  padding: 14px 18px;
+  display: flex; gap: 5px; align-items: center;
+}
+.dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--purple-400);
+  animation: bounce 1.2s infinite;
+}
+.dot:nth-child(2) { animation-delay: .2s; }
+.dot:nth-child(3) { animation-delay: .4s; }
+
+/* ===== INPUT ===== */
+.input-area {
+  padding: 14px 32px 20px;
+  border-top: 1px solid var(--purple-border);
+  background: var(--bg-primary);
+}
+.input-row {
+  display: flex; gap: 10px; align-items: flex-end;
+  background: var(--bg-input);
+  border: 1px solid var(--purple-border);
+  border-radius: 14px;
+  padding: 10px 10px 10px 16px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.input-row:focus-within {
+  border-color: var(--purple-500);
+  box-shadow: 0 0 0 3px rgba(139,92,246,.08);
+}
+.q-input {
+  flex: 1; background: none; border: none; outline: none;
+  color: var(--text-1); font-size: 14px; line-height: 1.55;
+  resize: none; max-height: 120px; font-family: inherit;
+}
+.q-input::placeholder { color: var(--text-3); }
+.send-btn {
+  width: 38px; height: 38px; flex-shrink: 0;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--purple-600), var(--purple-500));
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .2s;
+}
+.send-btn:hover { transform: scale(1.07); box-shadow: 0 4px 12px rgba(124,58,237,.4); }
+.send-btn:disabled { opacity: .35; cursor: not-allowed; transform: none; box-shadow: none; }
+.send-btn svg { width: 16px; height: 16px; fill: white; }
+.input-hint { font-size: 11px; color: var(--text-3); margin-top: 7px; padding-left: 2px; }
+
+/* ===== TOAST ===== */
+.toast {
+  position: fixed; bottom: 22px; right: 22px;
+  padding: 10px 18px; border-radius: var(--rs);
+  font-size: 13px; font-weight: 500; z-index: 999;
+  animation: toastIn .3s ease; max-width: 340px; line-height: 1.4;
+}
+.toast.ok  { background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.28); color: #6ee7b7; }
+.toast.err { background: rgba(239,68,68,.12);  border: 1px solid rgba(239,68,68,.28);  color: #fca5a5; }
+
+/* ===== ANIMATIONS ===== */
+@keyframes msgIn    { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@keyframes slideIn  { from { opacity:0; transform:translateX(-6px); } to { opacity:1; transform:translateX(0); } }
+@keyframes fadeIn   { from { opacity:0; } to { opacity:.55; } }
+@keyframes toastIn  { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+@keyframes spin     { to { transform:rotate(360deg); } }
+@keyframes pulse    { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+@keyframes bounce   { 0%,60%,100% { transform:translateY(0); } 30% { transform:translateY(-6px); } }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── HEADER ── -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">◈</div>
+      <span class="app-name">RAG Chatbot</span>
+      <span class="app-sub">powered by FAISS + flan-t5</span>
+    </div>
+    <div class="header-right">
+      <div class="status-badge">
+        <div class="status-dot loading" id="statusDot"></div>
+        <span id="statusText">Connecting…</span>
+      </div>
+      <div class="pill"><span id="docCount">0</span> chunks indexed</div>
+    </div>
+  </header>
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+
+    <span class="section-label">Documents</span>
+
+    <!-- upload zone -->
+    <div class="upload-zone" id="uploadZone">
+      <div class="upload-icon">📄</div>
+      <div class="upload-label">
+        <strong>Drop PDF here</strong>
+        or click to browse
+      </div>
+      <input type="file" class="upload-input" id="fileInput" accept=".pdf">
+      <div class="upload-spinner" id="uploadSpinner">
+        <div class="spinner"></div>
+        Indexing…
+      </div>
+    </div>
+
+    <!-- doc list -->
+    <span class="section-label">Loaded files</span>
+    <div class="doc-list" id="docList">
+      <div class="empty-state">No documents yet.<br>Upload a PDF to start.</div>
+    </div>
+
+    <button class="btn-clear" onclick="clearDocuments()">🗑&nbsp; Clear All Documents</button>
+  </aside>
+
+  <!-- ── CHAT ── -->
+  <div class="chat">
+    <div class="messages" id="messages">
+      <div class="welcome" id="welcome">
+        <div class="welcome-glyph">◈</div>
+        <h2>Ask anything</h2>
+        <p>Upload a PDF in the sidebar then ask questions about it. I retrieve the most relevant passages and generate a grounded answer with source citations.</p>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <div class="input-row">
+        <textarea
+          class="q-input" id="qInput" rows="1"
+          placeholder="Ask a question about your documents…"
+          onkeydown="handleKey(event)"
+          oninput="autoResize(this)"
+        ></textarea>
+        <button class="send-btn" id="sendBtn" onclick="send()">
+          <svg viewBox="0 0 24 24"><path d="M2 21L23 12 2 3v7l15 2-15 2z"/></svg>
+        </button>
+      </div>
+      <p class="input-hint">Enter to send &nbsp;·&nbsp; Shift+Enter for new line</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────
+const docs = [];   // { name, chunks }
+let busy = false;
+
+// ─────────────────────────────────────────────
+// Boot
+// ─────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  checkHealth();
+  setInterval(checkHealth, 8000);
+
+  const zone  = document.getElementById('uploadZone');
+  const input = document.getElementById('fileInput');
+
+  zone.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => input.files[0] && upload(input.files[0]));
+
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f?.name.endsWith('.pdf')) upload(f);
+    else toast('Only PDF files are supported', 'err');
+  });
+});
+
+// ─────────────────────────────────────────────
+// Health
+// ─────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const d = await api('/api/v1/health');
+    setStatus('online', 'Online');
+    document.getElementById('docCount').textContent = d.documents_loaded ?? 0;
+  } catch {
+    setStatus('offline', 'Offline');
+  }
+}
+
+function setStatus(state, label) {
+  const dot  = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  dot.className  = 'status-dot' + (state === 'online' ? ' online' : '');
+  text.textContent = label;
+}
+
+// ─────────────────────────────────────────────
+// Upload
+// ─────────────────────────────────────────────
+async function upload(file) {
+  const spinner = document.getElementById('uploadSpinner');
+  const zone    = document.getElementById('uploadZone');
+  spinner.classList.add('active');
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  try {
+    const d = await fetch('/api/v1/documents/upload', { method: 'POST', body: fd })
+      .then(r => r.json());
+
+    if (d.detail) throw new Error(d.detail);
+
+    docs.push({ name: file.name, chunks: d.chunks_added });
+    renderDocs();
+    document.getElementById('docCount').textContent = d.total_documents;
+    toast(`✓ ${file.name} — ${d.chunks_added} chunks indexed`, 'ok');
+  } catch (e) {
+    toast(e.message || 'Upload failed', 'err');
+  } finally {
+    spinner.classList.remove('active');
+    document.getElementById('fileInput').value = '';
+  }
+}
+
+function renderDocs() {
+  const el = document.getElementById('docList');
+  if (!docs.length) {
+    el.innerHTML = '<div class="empty-state">No documents yet.<br>Upload a PDF to start.</div>';
+    return;
+  }
+  el.innerHTML = docs.map(d => `
+    <div class="doc-item">
+      <span class="doc-icon">📄</span>
+      <span class="doc-name" title="${esc(d.name)}">${esc(d.name)}</span>
+      <span class="doc-chunks">${d.chunks}</span>
+    </div>
+  `).join('');
+}
+
+async function clearDocuments() {
+  await api('/api/v1/documents', { method: 'DELETE' });
+  docs.length = 0;
+  renderDocs();
+  document.getElementById('docCount').textContent = '0';
+  toast('All documents cleared', 'ok');
+}
+
+// ─────────────────────────────────────────────
+// Chat
+// ─────────────────────────────────────────────
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+async function send() {
+  const inp = document.getElementById('qInput');
+  const q   = inp.value.trim();
+  if (!q || busy) return;
+
+  inp.value = ''; inp.style.height = 'auto';
+  hideWelcome();
+  addMsg('user', q);
+
+  busy = true;
+  document.getElementById('sendBtn').disabled = true;
+  const typing = addTyping();
+
+  try {
+    const d = await api('/api/v1/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q })
+    });
+    if (d.detail) throw new Error(d.detail);
+    typing.remove();
+    addMsg('bot', d.answer, d.sources || []);
+  } catch (e) {
+    typing.remove();
+    addMsg('bot', `⚠ ${e.message || 'Something went wrong.'}`);
+  } finally {
+    busy = false;
+    document.getElementById('sendBtn').disabled = false;
+    inp.focus();
+  }
+}
+
+function hideWelcome() {
+  document.getElementById('welcome')?.remove();
+}
+
+function addMsg(role, text, sources = []) {
+  const wrap = document.getElementById('messages');
+
+  const el = Object.assign(document.createElement('div'), { className: `msg ${role}` });
+
+  const bubble = Object.assign(document.createElement('div'), {
+    className: 'bubble',
+    textContent: text
+  });
+  el.appendChild(bubble);
+
+  if (role === 'bot' && sources.length) {
+    const src = document.createElement('div');
+    src.className = 'sources';
+
+    const toggle = Object.assign(document.createElement('div'), {
+      className: 'sources-toggle',
+      innerHTML: `▸ ${sources.length} source${sources.length > 1 ? 's' : ''} used`
+    });
+
+    const list = Object.assign(document.createElement('div'), { className: 'sources-list hidden' });
+    list.innerHTML = sources.map(s => `
+      <div class="src-card">
+        <div class="src-meta">
+          <span class="src-label">
+            ${s.metadata?.source ? `📄 ${esc(s.metadata.source)}` : 'Source'}
+            ${s.metadata?.page   ? ` · Page ${s.metadata.page}` : ''}
+          </span>
+          <span class="src-score">${(s.score * 100).toFixed(0)}% match</span>
+        </div>
+        <div class="src-text">${esc(s.text)}</div>
+      </div>
+    `).join('');
+
+    let open = false;
+    toggle.addEventListener('click', () => {
+      open = !open;
+      toggle.innerHTML = `${open ? '▾' : '▸'} ${sources.length} source${sources.length > 1 ? 's' : ''} used`;
+      list.classList.toggle('hidden', !open);
+    });
+
+    src.appendChild(toggle);
+    src.appendChild(list);
+    el.appendChild(src);
+  }
+
+  wrap.appendChild(el);
+  wrap.scrollTop = wrap.scrollHeight;
+  return el;
+}
+
+function addTyping() {
+  const wrap = document.getElementById('messages');
+  const el = Object.assign(document.createElement('div'), {
+    className: 'typing',
+    innerHTML: `<div class="typing-bubble">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>`
+  });
+  wrap.appendChild(el);
+  wrap.scrollTop = wrap.scrollHeight;
+  return el;
+}
+
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
+async function api(url, opts = {}) {
+  const r = await fetch(url, opts);
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${r.status}`); }
+  return r.json();
+}
+
+function toast(msg, type = 'ok') {
+  document.querySelector('.toast')?.remove();
+  const el = Object.assign(document.createElement('div'), { className: `toast ${type}`, textContent: msg });
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* hide utility */
+const style = document.createElement('style');
+style.textContent = '.hidden { display:none !important; }';
+document.head.appendChild(style);
+</script>
+</body>
+</html>
