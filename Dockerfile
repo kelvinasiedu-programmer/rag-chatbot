@@ -16,9 +16,25 @@ COPY pyproject.toml .
 
 RUN mkdir -p data/vector_store
 
-EXPOSE 8000
+# Pin HuggingFace cache to a writable directory inside the image
+ENV HF_HOME=/app/.cache/huggingface
+ENV TRANSFORMERS_CACHE=/app/.cache/huggingface
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"
+# Pre-download models at build time so startup is instant (no timeout)
+RUN python -c "\
+from sentence_transformers import SentenceTransformer; \
+SentenceTransformer('all-MiniLM-L12-v2'); \
+print('Embedding model ready')"
 
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+RUN python -c "\
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; \
+AutoTokenizer.from_pretrained('google/flan-t5-small'); \
+AutoModelForSeq2SeqLM.from_pretrained('google/flan-t5-small'); \
+print('LLM ready')"
+
+EXPOSE 7860
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:7860/api/v1/health')"
+
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "7860"]
