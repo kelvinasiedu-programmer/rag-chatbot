@@ -2,7 +2,7 @@
 
 Retrieval-Augmented Generation chatbot that answers questions from PDF documents using embedding-based retrieval and language model generation.
 
-[![CI](https://github.com/KelvinAsiedu/rag-chatbot/actions/workflows/ci.yml/badge.svg)](https://github.com/KelvinAsiedu/rag-chatbot/actions/workflows/ci.yml)
+[![CI](https://github.com/kelvinasiedu-programmer/rag-chatbot/actions/workflows/ci.yml/badge.svg)](https://github.com/kelvinasiedu-programmer/rag-chatbot/actions/workflows/ci.yml)
 
 ## Architecture
 
