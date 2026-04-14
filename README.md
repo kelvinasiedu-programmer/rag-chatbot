@@ -1,3 +1,13 @@
+---
+title: RAG Chatbot
+emoji: robot
+colorFrom: purple
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # RAG Chatbot
 
 Retrieval-Augmented Generation chatbot that answers questions from PDF documents using embedding-based retrieval and language model generation.
