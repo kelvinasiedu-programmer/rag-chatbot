@@ -1,6 +1,6 @@
 ---
 title: RAG Chatbot
-emoji: robot
+emoji: 🤖
 colorFrom: purple
 colorTo: indigo
 sdk: docker
