@@ -1,0 +1,46 @@
+[project]
+name = "rag-chatbot"
+version = "1.0.0"
+description = "Production-grade Retrieval-Augmented Generation chatbot with FastAPI"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+readme = "README.md"
+
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "sentence-transformers>=2.2.0",
+    "transformers>=4.35.0",
+    "torch>=2.0.0",
+    "faiss-cpu>=1.7.4",
+    "pypdf>=3.17.0",
+    "pydantic-settings>=2.1.0",
+    "python-multipart>=0.0.6",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "httpx>=0.25.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
