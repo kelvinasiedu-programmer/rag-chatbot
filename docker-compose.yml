@@ -2,7 +2,7 @@ services:
   api:
     build: .
     ports:
-      - "8000:8000"
+      - "7860:7860"
     volumes:
       - ./data:/app/data
     env_file:
