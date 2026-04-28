@@ -1,11 +1,16 @@
 """PDF text extraction and chunking utilities."""
 
 import logging
+import re
 from pathlib import Path
 
 from pypdf import PdfReader
 
 logger = logging.getLogger(__name__)
+
+# Sentence boundary: end punctuation followed by whitespace.
+# Avoids splitting on common abbreviations (Mr., U.S., etc.) for the simple cases.
+_SENT_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'\(])")
 
 
 class PDFProcessor:
@@ -62,11 +67,46 @@ class PDFProcessor:
         return results
 
     def _split_text(self, text: str) -> list[str]:
-        """Split *text* into overlapping chunks."""
-        step = max(self.chunk_size - self.chunk_overlap, 1)
-        chunks = []
-        for i in range(0, len(text), step):
-            chunk = text[i : i + self.chunk_size].strip()
-            if chunk:
-                chunks.append(chunk)
+        """Split *text* into chunks at sentence boundaries when possible.
+
+        Greedily packs sentences into chunks up to ``chunk_size`` chars. Carries
+        the tail of the previous chunk forward as overlap to preserve context
+        across boundaries. Falls back to character-window splitting for very
+        long sentences (e.g. tables flattened into one line).
+        """
+        if not text:
+            return []
+
+        sentences = _SENT_SPLIT_RE.split(text)
+        chunks: list[str] = []
+        current = ""
+
+        for sent in sentences:
+            sent = sent.strip()
+            if not sent:
+                continue
+
+            # Sentence longer than chunk_size on its own — slice it by chars.
+            if len(sent) > self.chunk_size:
+                if current:
+                    chunks.append(current)
+                    current = ""
+                step = max(self.chunk_size - self.chunk_overlap, 1)
+                for i in range(0, len(sent), step):
+                    piece = sent[i : i + self.chunk_size].strip()
+                    if piece:
+                        chunks.append(piece)
+                continue
+
+            candidate = f"{current} {sent}".strip() if current else sent
+            if len(candidate) <= self.chunk_size:
+                current = candidate
+            else:
+                chunks.append(current)
+                # Overlap: carry the tail of the previous chunk forward
+                tail = current[-self.chunk_overlap:] if self.chunk_overlap else ""
+                current = f"{tail} {sent}".strip() if tail else sent
+
+        if current:
+            chunks.append(current)
         return chunks

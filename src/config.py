@@ -10,7 +10,11 @@ class Settings(BaseSettings):
 
     # Models
     embedding_model: str = "all-MiniLM-L12-v2"
-    llm_model: str = "google/flan-t5-base"
+    # Backend toggle: "local" (flan-t5, free) or "anthropic" (Claude, API key + credits required)
+    llm_backend: str = "local"
+    local_llm_model: str = "google/flan-t5-base"
+    anthropic_llm_model: str = "claude-haiku-4-5"
+    anthropic_api_key: str | None = None
 
     # Vector Store
     vector_store_path: str = "./data/vector_store"
@@ -19,7 +23,7 @@ class Settings(BaseSettings):
     chunk_size: int = 500
     chunk_overlap: int = 50
     top_k: int = 3
-    max_tokens: int = 200
+    max_tokens: int = 512
 
     # Security
     rate_limit_requests: int = 10

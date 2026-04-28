@@ -26,11 +26,12 @@ from sentence_transformers import SentenceTransformer; \
 SentenceTransformer('all-MiniLM-L12-v2'); \
 print('Embedding model ready')"
 
+# Pre-download local LLM (used when LLM_BACKEND=local, the free default)
 RUN python -c "\
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; \
-AutoTokenizer.from_pretrained('google/flan-t5-small'); \
-AutoModelForSeq2SeqLM.from_pretrained('google/flan-t5-small'); \
-print('LLM ready')"
+AutoTokenizer.from_pretrained('google/flan-t5-base'); \
+AutoModelForSeq2SeqLM.from_pretrained('google/flan-t5-base'); \
+print('Local LLM ready')"
 
 EXPOSE 7860
 

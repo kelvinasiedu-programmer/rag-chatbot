@@ -1,9 +1,12 @@
-"""Core RAG pipeline: retrieval + generation."""
+"""Core RAG pipeline: retrieval + generation.
+
+Generation backend is pluggable via Settings.llm_backend:
+- "local"     : flan-t5-base via transformers (free, slower, lower quality)
+- "anthropic" : Claude via Anthropic API (faster, higher quality, requires credits)
+"""
 
 import logging
-
-import torch
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+import os
 
 from .config import Settings
 from .pdf_processor import PDFProcessor
@@ -23,6 +26,46 @@ Question: {question}
 Answer:"""
 
 
+class _LocalGenerator:
+    """flan-t5-base via HuggingFace transformers — free, runs on CPU."""
+
+    def __init__(self, model_name: str):
+        import torch
+        from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model.to(self.device)
+        self._torch = torch
+
+    def generate(self, prompt: str, max_tokens: int) -> str:
+        inputs = self.tokenizer(
+            prompt, return_tensors="pt", max_length=512, truncation=True
+        ).to(self.device)
+        with self._torch.no_grad():
+            outputs = self.model.generate(**inputs, max_new_tokens=max_tokens)
+        return self.tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
+
+
+class _AnthropicGenerator:
+    """Claude via Anthropic API — requires ANTHROPIC_API_KEY + paid credits."""
+
+    def __init__(self, model_name: str, api_key: str):
+        from anthropic import Anthropic
+
+        self.model_name = model_name
+        self.client = Anthropic(api_key=api_key)
+
+    def generate(self, prompt: str, max_tokens: int) -> str:
+        msg = self.client.messages.create(
+            model=self.model_name,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return msg.content[0].text.strip()
+
+
 class RAGEngine:
     """Orchestrates the retrieval-augmented generation pipeline."""
 
@@ -40,13 +83,24 @@ class RAGEngine:
             chunk_overlap=settings.chunk_overlap,
         )
 
-        logger.info("Loading LLM: %s", settings.llm_model)
-        self.tokenizer = AutoTokenizer.from_pretrained(settings.llm_model)
-        self.model = AutoModelForSeq2SeqLM.from_pretrained(settings.llm_model)
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model.to(self.device)
+        backend = settings.llm_backend.lower()
+        if backend == "anthropic":
+            api_key = settings.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY")
+            if not api_key:
+                raise RuntimeError(
+                    "llm_backend='anthropic' but ANTHROPIC_API_KEY is not set."
+                )
+            logger.info("Loading Anthropic LLM: %s", settings.anthropic_llm_model)
+            self.generator = _AnthropicGenerator(settings.anthropic_llm_model, api_key)
+        elif backend == "local":
+            logger.info("Loading local LLM: %s", settings.local_llm_model)
+            self.generator = _LocalGenerator(settings.local_llm_model)
+        else:
+            raise ValueError(
+                f"Unknown llm_backend '{settings.llm_backend}'. Use 'local' or 'anthropic'."
+            )
 
-        logger.info("RAG Engine ready (device=%s)", self.device)
+        logger.info("RAG Engine ready (backend=%s)", backend)
 
     def ingest_pdf(self, pdf_path: str) -> int:
         """Parse a PDF, chunk its text, and add to the vector store."""
@@ -69,17 +123,7 @@ class RAGEngine:
 
         context = "\n\n".join(r["text"] for r in results)
         prompt = PROMPT_TEMPLATE.format(context=context, question=question)
-
-        inputs = self.tokenizer(
-            prompt, return_tensors="pt", max_length=512, truncation=True
-        ).to(self.device)
-
-        with torch.no_grad():
-            outputs = self.model.generate(
-                **inputs, max_new_tokens=self.settings.max_tokens
-            )
-
-        answer = self.tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
+        answer = self.generator.generate(prompt, self.settings.max_tokens)
 
         sources = [
             {

@@ -41,6 +41,19 @@ class TestSplitText:
         chunks = proc._split_text("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
         assert len(chunks) > 1
 
+    def test_respects_sentence_boundaries(self):
+        """Sentences should not be split mid-word when they fit."""
+        proc = PDFProcessor(chunk_size=80, chunk_overlap=10)
+        text = (
+            "Capital expenditures rose 12% year over year. "
+            "Net interest income fell on margin compression. "
+            "Management reaffirmed full-year guidance."
+        )
+        chunks = proc._split_text(text)
+        # Each chunk should end on sentence-final punctuation (no mid-sentence cuts).
+        for c in chunks:
+            assert c.rstrip().endswith((".", "!", "?")), f"chunk does not end on sentence boundary: {c!r}"
+
 
 class TestExtractChunks:
     def test_blank_pdf_returns_empty(self, sample_pdf):
