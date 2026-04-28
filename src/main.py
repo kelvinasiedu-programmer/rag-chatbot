@@ -168,6 +168,14 @@ async def upload_document(file: UploadFile = File(...)):
         tmp.close()
 
         count = engine.ingest_pdf(tmp.name)
+        if count == 0:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "No extractable text found. The PDF may be scanned/image-only, "
+                    "encrypted, or empty. Try a text-based PDF."
+                ),
+            )
         return IngestResponse(
             message=f"Processed {file.filename}",
             chunks_added=count,

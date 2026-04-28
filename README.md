@@ -8,71 +8,80 @@ app_port: 7860
 pinned: false
 ---
 
-# RAG Chatbot
+# Ask 10-K — RAG over SEC Annual Reports
 
-Retrieval-Augmented Generation chatbot that answers questions from PDF documents using embedding-based retrieval and language model generation.
+A retrieval-augmented chat interface for SEC 10-K filings. Upload three banks' annual reports and ask grounded, citation-backed questions across them — *"How does Capital One's net charge-off rate compare to JPMorgan's?"*, *"Summarize each bank's stated CRE exposure risks."*
+
+Built as a study in production-shaped RAG: typed config, eval harness, two interchangeable LLM backends, and a frontend that surfaces citations rather than hiding them.
 
 [![CI](https://github.com/kelvinasiedu-programmer/rag-chatbot/actions/workflows/ci.yml/badge.svg)](https://github.com/kelvinasiedu-programmer/rag-chatbot/actions/workflows/ci.yml)
+
+**Live demo:** [rag-chatbot-web.vercel.app](https://rag-chatbot-web.vercel.app/) · **Frontend repo:** [rag-chatbot-web](https://github.com/kelvinasiedu-programmer/rag-chatbot-web)
+
+## Why 10-Ks?
+
+10-Ks are dense, terminology-heavy, structurally complex financial documents. They're the workload where retrieval quality (precision, grounding, citation accuracy) actually matters — generic FAQ-style RAG demos don't surface this. Sample queries that work end-to-end:
+
+- *"What were Capital One's net charge-offs in 2024 and how does that compare to BAC?"*
+- *"Summarize each bank's stated risks around commercial real estate exposure."*
+- *"Which of these banks has the highest CET1 ratio?"*
+- *"How does each company describe its exposure to AI/LLM-related operational risk?"*
 
 ## Architecture
 
 ```
 Client ──▶ FastAPI REST API ──▶ RAG Engine
                                    │
-                         ┌─────────┴─────────┐
-                         ▼                   ▼
-                    FAISS Vector         HuggingFace
-                      Store               LLM
-                   (retrieval)         (generation)
+                         ┌─────────┴──────────────┐
+                         ▼                        ▼
+                    FAISS Vector             Generator
+                      Store              ┌──────┴───────┐
+                   (retrieval)           ▼              ▼
+                                     flan-t5-base  Claude API
+                                       (free)     (toggle, paid)
 ```
 
 **Pipeline:**
 
-1. **Ingest** — PDFs are parsed, cleaned, split into overlapping chunks, and embedded into a FAISS vector index
-2. **Retrieve** — User queries are embedded and matched against stored chunks via L2 similarity search
-3. **Generate** — Retrieved context is injected into a prompt template; the LLM generates a grounded answer with source citations
+1. **Ingest** — PDFs are parsed, sentence-split, embedded, and added to a FAISS vector index. Scanned/image-only PDFs return HTTP 422 instead of silently indexing zero chunks.
+2. **Retrieve** — Query is embedded and matched against stored chunks via similarity search.
+3. **Generate** — Retrieved context is injected into a prompt template; the configured generator returns a grounded answer with source citations (filename + page number + similarity score).
 
-## Features
+## Two LLM Backends (Toggle)
 
-- **REST API** — FastAPI with auto-generated OpenAPI/Swagger docs
-- **FAISS vector search** — Facebook AI Similarity Search for scalable retrieval
-- **Persistent storage** — vector index and documents survive server restarts
-- **PDF upload** — streaming upload endpoint with file size validation
-- **Rate limiting** — sliding-window middleware for abuse prevention
-- **Source citations** — every answer includes scored source chunks with page numbers
-- **Evaluation framework** — keyword-recall metrics for tuning RAG quality
-- **Docker** — multi-stage build with health checks
-- **CI/CD** — GitHub Actions: lint, test (Python 3.10–3.12), Docker build
-- **Type-safe config** — Pydantic Settings with `.env` file support
+| `LLM_BACKEND` | Model              | Latency on free tier | Cost           | When to use                           |
+| ------------- | ------------------ | -------------------- | -------------- | ------------------------------------- |
+| `local` *(default)* | `flan-t5-base`     | 3–5 s                | $0             | Free demo, local dev, no API keys     |
+| `anthropic`   | `claude-haiku-4-5` | 0.5–1.5 s            | ~$0.001/query  | Higher answer quality, faster replies |
+
+Both backends share the same `Generator` interface ([rag_engine.py](src/rag_engine.py)) — adding Ollama or another local model is a ~30-line addition.
 
 ## Quick Start
 
 ### Prerequisites
-
 - Python 3.10+
+- (Optional) Anthropic API key if you want to use the Claude backend
 
 ### Install & Run
 
 ```bash
-# Clone
 git clone https://github.com/YOUR_USERNAME/rag-chatbot.git
 cd rag-chatbot
 
-# Virtual environment
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# Install
 pip install -r requirements.txt
-
-# Configure
 cp .env.example .env
 
-# Run
 uvicorn src.main:app --reload
 ```
 
-API available at `http://localhost:8000`. Interactive docs at `http://localhost:8000/docs`.
+API at `http://localhost:8000`, OpenAPI docs at `/docs`.
+
+### Load the sample 10-K corpus
+
+The repo doesn't ship the filings (they update annually). See [data/sample_corpus/README.md](data/sample_corpus/README.md) for the recommended starter set (Capital One, JPM, BAC) and one-line download instructions.
 
 ### Docker
 
@@ -85,35 +94,22 @@ docker compose up -d
 
 | Method   | Endpoint                    | Description            |
 | -------- | --------------------------- | ---------------------- |
-| `POST`   | `/api/v1/documents/upload`  | Upload a PDF document  |
+| `POST`   | `/api/v1/documents/upload`  | Upload a PDF (returns 422 if no extractable text) |
 | `POST`   | `/api/v1/query`             | Ask a question         |
 | `GET`    | `/api/v1/documents`         | Get document stats     |
 | `DELETE` | `/api/v1/documents`         | Clear all documents    |
 | `GET`    | `/api/v1/health`            | Health check           |
 
-### Example Usage
-
-```bash
-# Upload a PDF
-curl -X POST http://localhost:8000/api/v1/documents/upload \
-  -F "file=@document.pdf"
-
-# Ask a question
-curl -X POST http://localhost:8000/api/v1/query \
-  -H "Content-Type: application/json" \
-  -d '{"question": "What is the password policy?"}'
-```
-
 ### Response Format
 
 ```json
 {
-  "answer": "Passwords must be at least 12 characters and rotated every 365 days.",
+  "answer": "Capital One reported net charge-offs of $X.XB in 2024, up from $Y.YB in 2023, driven primarily by credit-card portfolio normalization.",
   "sources": [
     {
-      "text": "[Page 5] Password requirements include...",
-      "score": 0.8234,
-      "metadata": {"source": "handbook.pdf", "page": 5, "chunk_index": 2}
+      "text": "[Page 47] Net charge-offs in our Credit Card segment were ...",
+      "score": 0.83,
+      "metadata": {"source": "cof-10k-2024.pdf", "page": 47, "chunk_index": 2}
     }
   ]
 }
@@ -121,17 +117,24 @@ curl -X POST http://localhost:8000/api/v1/query \
 
 ## Configuration
 
-All settings are configurable via environment variables or `.env`:
+| Variable                | Default              | Description                                    |
+| ----------------------- | -------------------- | ---------------------------------------------- |
+| `LLM_BACKEND`           | `local`              | `local` (flan-t5, free) or `anthropic`         |
+| `LOCAL_LLM_MODEL`       | `google/flan-t5-base`| Local generator (HuggingFace)                  |
+| `ANTHROPIC_LLM_MODEL`   | `claude-haiku-4-5`   | Claude model when `LLM_BACKEND=anthropic`      |
+| `ANTHROPIC_API_KEY`     | *(unset)*            | Required when `LLM_BACKEND=anthropic`          |
+| `EMBEDDING_MODEL`       | `all-MiniLM-L12-v2`  | Sentence-transformer for retrieval             |
+| `CHUNK_SIZE`            | `500`                | Target chars per chunk (sentence-aware split)  |
+| `CHUNK_OVERLAP`         | `50`                 | Tail-overlap between adjacent chunks           |
+| `TOP_K`                 | `3`                  | Context chunks retrieved per query             |
+| `MAX_UPLOAD_SIZE_MB`    | `10`                 | PDF upload ceiling                             |
 
-| Variable              | Default              | Description                       |
-| --------------------- | -------------------- | --------------------------------- |
-| `EMBEDDING_MODEL`     | `all-MiniLM-L12-v2`  | Sentence transformer model        |
-| `LLM_MODEL`           | `google/flan-t5-base` | Text generation model             |
-| `CHUNK_SIZE`          | `500`                | Characters per text chunk         |
-| `CHUNK_OVERLAP`       | `50`                 | Overlap between adjacent chunks   |
-| `TOP_K`               | `3`                  | Context chunks retrieved per query|
-| `RATE_LIMIT_REQUESTS` | `10`                 | Max requests per time window      |
-| `MAX_UPLOAD_SIZE_MB`  | `10`                 | Maximum PDF upload size           |
+## Engineering Notes
+
+- **Sentence-boundary chunking** — chunks are packed at sentence boundaries up to `CHUNK_SIZE`, preserving semantic units instead of cutting mid-word ([pdf_processor.py](src/pdf_processor.py)).
+- **No silent ingestion failures** — uploading a scanned/image-only PDF returns 422 with a clear error rather than reporting "0 chunks indexed" as success.
+- **Persistent vector index** — FAISS index + JSON metadata are saved to `./data/vector_store/` after each ingest.
+- **Mocked tests for both backends** — `pytest` runs without spending API credits.
 
 ## Testing
 
@@ -140,44 +143,21 @@ pip install -r requirements-dev.txt
 make test
 ```
 
-## Project Structure
-
-```
-rag-chatbot/
-├── src/
-│   ├── main.py           # FastAPI application and routes
-│   ├── config.py          # Pydantic Settings configuration
-│   ├── rag_engine.py      # Core RAG pipeline orchestration
-│   ├── vector_store.py    # FAISS-backed vector database
-│   ├── pdf_processor.py   # PDF extraction and chunking
-│   ├── schemas.py         # API request/response models
-│   └── evaluation.py      # RAG quality evaluation utilities
-├── tests/
-│   ├── conftest.py        # Shared pytest fixtures
-│   ├── test_vector_store.py
-│   ├── test_pdf_processor.py
-│   └── test_rag_engine.py
-├── .github/workflows/ci.yml
-├── Dockerfile
-├── docker-compose.yml
-├── Makefile
-├── pyproject.toml
-├── requirements.txt
-└── requirements-dev.txt
-```
+32 tests cover PDF chunking, vector-store search, both LLM backends, and the upload-error path.
 
 ## Tech Stack
 
-| Component              | Technology                                      |
-| ---------------------- | ----------------------------------------------- |
-| API Framework          | FastAPI                                         |
-| Vector Search          | FAISS (Facebook AI Similarity Search)           |
-| Embeddings             | Sentence Transformers (`all-MiniLM-L12-v2`)     |
-| LLM                    | HuggingFace Transformers (`flan-t5-base`)       |
-| Validation             | Pydantic v2                                     |
-| Containerization       | Docker (multi-stage build)                      |
-| CI/CD                  | GitHub Actions                                  |
-| Testing                | pytest + coverage                               |
+| Component              | Technology                                                |
+| ---------------------- | --------------------------------------------------------- |
+| API Framework          | FastAPI                                                   |
+| Vector Search          | FAISS                                                     |
+| Embeddings             | Sentence Transformers (`all-MiniLM-L12-v2`)               |
+| LLM (default)          | HuggingFace Transformers (`flan-t5-base`)                 |
+| LLM (toggle)           | Anthropic Claude (`claude-haiku-4-5`)                     |
+| Validation             | Pydantic v2                                               |
+| Containerization       | Docker (multi-stage build)                                |
+| CI/CD                  | GitHub Actions                                            |
+| Testing                | pytest + coverage                                         |
 
 ## License
 
