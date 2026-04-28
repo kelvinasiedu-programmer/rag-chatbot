@@ -8,9 +8,9 @@ app_port: 7860
 pinned: false
 ---
 
-# Ask 10-K — RAG over SEC Annual Reports
+# Ask 10-K: RAG over SEC Annual Reports
 
-A retrieval-augmented chat interface for SEC 10-K filings. Upload three banks' annual reports and ask grounded, citation-backed questions across them — *"How does Capital One's net charge-off rate compare to JPMorgan's?"*, *"Summarize each bank's stated CRE exposure risks."*
+A retrieval-augmented chat interface for SEC 10-K filings. Upload three banks' annual reports and ask grounded, citation-backed questions across them, like *"How does Capital One's net charge-off rate compare to JPMorgan's?"* or *"Summarize each bank's stated CRE exposure risks."*
 
 Built as a study in production-shaped RAG: typed config, eval harness, two interchangeable LLM backends, and a frontend that surfaces citations rather than hiding them.
 
@@ -20,7 +20,7 @@ Built as a study in production-shaped RAG: typed config, eval harness, two inter
 
 ## Why 10-Ks?
 
-10-Ks are dense, terminology-heavy, structurally complex financial documents. They're the workload where retrieval quality (precision, grounding, citation accuracy) actually matters — generic FAQ-style RAG demos don't surface this. Sample queries that work end-to-end:
+10-Ks are dense, terminology-heavy, structurally complex financial documents. They're the workload where retrieval quality (precision, grounding, citation accuracy) actually matters. Generic FAQ-style RAG demos don't surface this. Sample queries that work end-to-end:
 
 - *"What were Capital One's net charge-offs in 2024 and how does that compare to BAC?"*
 - *"Summarize each bank's stated risks around commercial real estate exposure."*
@@ -43,9 +43,9 @@ Client ──▶ FastAPI REST API ──▶ RAG Engine
 
 **Pipeline:**
 
-1. **Ingest** — PDFs are parsed, sentence-split, embedded, and added to a FAISS vector index. Scanned/image-only PDFs return HTTP 422 instead of silently indexing zero chunks.
-2. **Retrieve** — Query is embedded and matched against stored chunks via similarity search.
-3. **Generate** — Retrieved context is injected into a prompt template; the configured generator returns a grounded answer with source citations (filename + page number + similarity score).
+1. **Ingest:** PDFs are parsed, sentence-split, embedded, and added to a FAISS vector index. Scanned/image-only PDFs return HTTP 422 instead of silently indexing zero chunks.
+2. **Retrieve:** query is embedded and matched against stored chunks via similarity search.
+3. **Generate:** retrieved context is injected into a prompt template; the configured generator returns a grounded answer with source citations (filename + page number + similarity score).
 
 ## Two LLM Backends (Toggle)
 
@@ -54,7 +54,7 @@ Client ──▶ FastAPI REST API ──▶ RAG Engine
 | `local` *(default)* | `flan-t5-base`     | 3–5 s                | $0             | Free demo, local dev, no API keys     |
 | `anthropic`   | `claude-haiku-4-5` | 0.5–1.5 s            | ~$0.001/query  | Higher answer quality, faster replies |
 
-Both backends share the same `Generator` interface ([rag_engine.py](src/rag_engine.py)) — adding Ollama or another local model is a ~30-line addition.
+Both backends share the same `Generator` interface ([rag_engine.py](src/rag_engine.py)). Adding Ollama or another local model is a ~30-line addition.
 
 ## Quick Start
 
@@ -131,10 +131,10 @@ docker compose up -d
 
 ## Engineering Notes
 
-- **Sentence-boundary chunking** — chunks are packed at sentence boundaries up to `CHUNK_SIZE`, preserving semantic units instead of cutting mid-word ([pdf_processor.py](src/pdf_processor.py)).
-- **No silent ingestion failures** — uploading a scanned/image-only PDF returns 422 with a clear error rather than reporting "0 chunks indexed" as success.
-- **Persistent vector index** — FAISS index + JSON metadata are saved to `./data/vector_store/` after each ingest.
-- **Mocked tests for both backends** — `pytest` runs without spending API credits.
+- **Sentence-boundary chunking:** chunks are packed at sentence boundaries up to `CHUNK_SIZE`, preserving semantic units instead of cutting mid-word ([pdf_processor.py](src/pdf_processor.py)).
+- **No silent ingestion failures:** uploading a scanned/image-only PDF returns 422 with a clear error rather than reporting "0 chunks indexed" as success.
+- **Persistent vector index:** FAISS index + JSON metadata are saved to `./data/vector_store/` after each ingest.
+- **Mocked tests for both backends:** `pytest` runs without spending API credits.
 
 ## Testing
 

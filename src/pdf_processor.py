@@ -86,7 +86,7 @@ class PDFProcessor:
             if not sent:
                 continue
 
-            # Sentence longer than chunk_size on its own — slice it by chars.
+            # Sentence longer than chunk_size on its own; slice it by chars.
             if len(sent) > self.chunk_size:
                 if current:
                     chunks.append(current)
