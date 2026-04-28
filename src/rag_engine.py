@@ -27,7 +27,7 @@ Answer:"""
 
 
 class _LocalGenerator:
-    """flan-t5-base via HuggingFace transformers — free, runs on CPU."""
+    """flan-t5-base via HuggingFace transformers. Free, runs on CPU."""
 
     def __init__(self, model_name: str):
         import torch
@@ -49,7 +49,7 @@ class _LocalGenerator:
 
 
 class _AnthropicGenerator:
-    """Claude via Anthropic API — requires ANTHROPIC_API_KEY + paid credits."""
+    """Claude via Anthropic API. Requires ANTHROPIC_API_KEY and paid credits."""
 
     def __init__(self, model_name: str, api_key: str):
         from anthropic import Anthropic

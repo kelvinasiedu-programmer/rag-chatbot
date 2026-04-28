@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting %s ...", settings.app_name)
     engine = RAGEngine(settings)
     engine.vector_store.load()
-    logger.info("Ready — %d documents loaded", engine.vector_store.count)
+    logger.info("Ready: %d documents loaded", engine.vector_store.count)
     yield
     logger.info("Shutting down")
 
