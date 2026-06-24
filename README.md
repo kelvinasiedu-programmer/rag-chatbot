@@ -51,8 +51,8 @@ Client ──▶ FastAPI REST API ──▶ RAG Engine
 
 | `LLM_BACKEND` | Model              | Latency on free tier | Cost           | When to use                           |
 | ------------- | ------------------ | -------------------- | -------------- | ------------------------------------- |
-| `local` *(default)* | `flan-t5-base`     | 3–5 s                | $0             | Free demo, local dev, no API keys     |
-| `anthropic`   | `claude-haiku-4-5` | 0.5–1.5 s            | ~$0.001/query  | Higher answer quality, faster replies |
+| `local` *(default)* | `flan-t5-base`     | 3-5 s                | $0             | Free demo, local dev, no API keys     |
+| `anthropic`   | `claude-haiku-4-5` | 0.5-1.5 s            | ~$0.001/query  | Higher answer quality, faster replies |
 
 Both backends share the same `Generator` interface ([rag_engine.py](src/rag_engine.py)). Adding Ollama or another local model is a ~30-line addition.
 
