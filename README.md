@@ -65,7 +65,7 @@ Both backends share the same `Generator` interface ([rag_engine.py](src/rag_engi
 ### Install & Run
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/rag-chatbot.git
+git clone https://github.com/kelvinasiedu-programmer/rag-chatbot.git
 cd rag-chatbot
 
 python -m venv venv
