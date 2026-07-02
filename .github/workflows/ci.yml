@@ -28,6 +28,16 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
           restore-keys: ${{ runner.os }}-pip-
 
+      # Deliberately not keyed on requirements: the embedding model does not
+      # change when dependencies do, and re-downloading it on every run gets
+      # the runners rate-limited by the HuggingFace Hub.
+      - name: Cache HuggingFace models
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface
+          key: ${{ runner.os }}-hf-all-MiniLM-L12-v2
+          restore-keys: ${{ runner.os }}-hf-
+
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
