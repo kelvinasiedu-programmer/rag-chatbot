@@ -103,4 +103,5 @@ class TestEmptyStore:
 
             engine = RAGEngine(settings)
             result = engine.query("anything")
-            assert "no documents" in result["answer"].lower() or "upload" in result["answer"].lower()
+            answer = result["answer"].lower()
+            assert "no documents" in answer or "upload" in answer

@@ -495,7 +495,7 @@ function renderSources(sources){
     <div class="src">
       <div class="src-head">
         <strong>Source ${i+1}</strong>
-        <span>${s.metadata?.source || ''}${s.metadata?.page?' · p.'+s.metadata.page:''} · score ${s.score?.toFixed(3) ?? ''}</span>
+        <span>${escapeHtml(s.metadata?.source || '')}${s.metadata?.page?' · p.'+escapeHtml(String(s.metadata.page)):''} · score ${s.score?.toFixed(3) ?? ''}</span>
       </div>
       <div class="src-body">${escapeHtml(s.text || '').slice(0,420)}${(s.text||'').length>420?'…':''}</div>
     </div>

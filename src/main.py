@@ -2,12 +2,13 @@
 
 import logging
 import os
+import secrets
 import tempfile
 import time
 from collections import defaultdict
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -40,6 +41,10 @@ logger = logging.getLogger(__name__)
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Simple sliding-window rate limiter keyed by client IP."""
 
+    # Above this many tracked clients, sweep out IPs whose window has fully
+    # expired so a stream of unique source IPs cannot grow the map unbounded.
+    _SWEEP_AT = 10_000
+
     def __init__(self, app, max_requests: int = 10, window_seconds: int = 60):
         super().__init__(app)
         self.max_requests = max_requests
@@ -49,11 +54,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         client_ip = request.client.host if request.client else "unknown"
         now = time.time()
+        cutoff = now - self.window_seconds
+
+        if len(self._hits) > self._SWEEP_AT:
+            for ip in [k for k, v in self._hits.items() if not v or v[-1] <= cutoff]:
+                del self._hits[ip]
 
         # Prune timestamps outside the current window
-        self._hits[client_ip] = [
-            t for t in self._hits[client_ip] if now - t < self.window_seconds
-        ]
+        self._hits[client_ip] = [t for t in self._hits[client_ip] if t > cutoff]
 
         if len(self._hits[client_ip]) >= self.max_requests:
             return JSONResponse(
@@ -103,18 +111,36 @@ app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 async def root():
     return FileResponse(os.path.join(_static_dir, "index.html"))
 
+# Reflecting an arbitrary origin *with* credentials defeats the same-origin
+# policy, so credentials are only enabled when the origins are explicit.
+_allow_credentials = "*" not in settings.cors_origins
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=_allow_credentials,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type", "X-API-Key"],
 )
 app.add_middleware(
     RateLimitMiddleware,
     max_requests=settings.rate_limit_requests,
     window_seconds=settings.rate_limit_window,
 )
+
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+
+def require_admin(x_api_key: str | None = Header(default=None)) -> None:
+    """Guard destructive endpoints with a constant-time API-key check."""
+    expected = settings.admin_api_key
+    if not expected:
+        raise HTTPException(status_code=503, detail="Admin endpoints are not configured.")
+    if not x_api_key or not secrets.compare_digest(x_api_key, expected):
+        raise HTTPException(status_code=401, detail="Invalid or missing API key.")
 
 
 # ---------------------------------------------------------------------------
@@ -195,7 +221,7 @@ async def get_document_stats():
     )
 
 
-@app.delete("/api/v1/documents", tags=["Documents"])
+@app.delete("/api/v1/documents", tags=["Documents"], dependencies=[Depends(require_admin)])
 async def clear_documents():
     """Remove all documents from the vector store."""
     if engine:
