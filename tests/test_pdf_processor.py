@@ -52,7 +52,9 @@ class TestSplitText:
         chunks = proc._split_text(text)
         # Each chunk should end on sentence-final punctuation (no mid-sentence cuts).
         for c in chunks:
-            assert c.rstrip().endswith((".", "!", "?")), f"chunk does not end on sentence boundary: {c!r}"
+            assert c.rstrip().endswith((".", "!", "?")), (
+                f"chunk does not end on sentence boundary: {c!r}"
+            )
 
 
 class TestExtractChunks:

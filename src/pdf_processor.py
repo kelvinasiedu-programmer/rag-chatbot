@@ -16,9 +16,10 @@ _SENT_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'\(])")
 class PDFProcessor:
     """Extracts and chunks text from PDF documents."""
 
-    def __init__(self, chunk_size: int = 500, chunk_overlap: int = 50):
+    def __init__(self, chunk_size: int = 500, chunk_overlap: int = 50, max_pages: int = 200):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.max_pages = max_pages
 
     @staticmethod
     def clean_text(text: str) -> str:
@@ -37,6 +38,10 @@ class PDFProcessor:
         """
         reader = PdfReader(pdf_path)
         filename = Path(pdf_path).name
+        # Bound work on untrusted PDFs: a hostile file can carry an enormous
+        # page count to exhaust CPU/memory during extraction and embedding.
+        if end_page is None:
+            end_page = start_page + self.max_pages
         pages = reader.pages[start_page:end_page]
 
         results: list[dict] = []

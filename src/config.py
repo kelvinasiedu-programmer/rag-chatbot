@@ -30,5 +30,10 @@ class Settings(BaseSettings):
     rate_limit_window: int = 60
     cors_origins: list[str] = ["*"]
     max_upload_size_mb: int = 10
+    max_pdf_pages: int = 200
+    # When set, destructive endpoints require this key in the X-API-Key header.
+    # Unset, those endpoints fail closed (503) so the shared demo store cannot
+    # be wiped by an anonymous caller.
+    admin_api_key: str | None = None
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}

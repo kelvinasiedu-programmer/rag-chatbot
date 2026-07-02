@@ -81,6 +81,7 @@ class RAGEngine:
         self.pdf_processor = PDFProcessor(
             chunk_size=settings.chunk_size,
             chunk_overlap=settings.chunk_overlap,
+            max_pages=settings.max_pdf_pages,
         )
 
         backend = settings.llm_backend.lower()

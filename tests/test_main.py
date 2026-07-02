@@ -48,3 +48,24 @@ class TestUploadEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["chunks_added"] == 7
+
+
+class TestClearDocumentsAuth:
+    def test_requires_api_key(self, client, monkeypatch):
+        c, eng = client
+        monkeypatch.setattr(main_mod.settings, "admin_api_key", "secret")
+        assert c.delete("/api/v1/documents").status_code == 401
+        assert c.delete("/api/v1/documents", headers={"X-API-Key": "nope"}).status_code == 401
+        eng.vector_store.clear.assert_not_called()
+
+    def test_succeeds_with_api_key(self, client, monkeypatch):
+        c, eng = client
+        monkeypatch.setattr(main_mod.settings, "admin_api_key", "secret")
+        resp = c.delete("/api/v1/documents", headers={"X-API-Key": "secret"})
+        assert resp.status_code == 200
+        eng.vector_store.clear.assert_called_once()
+
+    def test_fails_closed_when_unconfigured(self, client, monkeypatch):
+        c, _ = client
+        monkeypatch.setattr(main_mod.settings, "admin_api_key", None)
+        assert c.delete("/api/v1/documents", headers={"X-API-Key": "secret"}).status_code == 503
